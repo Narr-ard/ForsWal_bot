@@ -1,4 +1,4 @@
-// index.js (Final versi Fors Wall + OpenRouter Gratis)
+// index.js - Fors Wall Bot (Final with OpenRouter + Character Personality)
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Collection, StickerFormatType } = require('discord.js');
 const fs = require('fs');
@@ -25,7 +25,7 @@ for (const file of commandFiles) {
   client.commands.set(command.name, command);
 }
 
-// Event utama
+// AUTO-REPLY LEARNING & COMMAND HANDLER
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -37,26 +37,69 @@ client.on('messageCreate', async message => {
     return message.reply(learned[msgContent]);
   }
 
-  // Command handler
   if (!message.content.startsWith(prefix)) return;
+
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
   const command = client.commands.get(commandName);
-
   if (!command) return;
 
   try {
     await command.execute(message, args, client);
   } catch (error) {
     console.error(error);
-    message.reply('Ada yang salah saat menjalankan perintah... Tapi jangan khawatir, aku akan segera memperbaikinya~');
+    message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
   }
 });
 
-// Welcome & Auto-role
+// !OBROL (CHATBOT DENGAN OPENROUTER)
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+
+  // Respon stiker
+  if (message.stickers.size > 0) {
+    return message.reply('Stiker itu lucu... Tapi tak selucu kamu, mungkin. ✨');
+  }
+
+  if (message.content.startsWith('!obrol')) {
+    const input = message.content.replace('!obrol', '').trim();
+    if (!input) return message.reply('Apa yang ingin kamu bicarakan, hm? 🌙');
+
+    try {
+      const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'mistralai/mistral-7b-instruct:free',
+        messages: [
+          {
+            role: 'system',
+            content: `Kamu adalah Fors Wall dari Lord of the Mysteries. Kamu sopan, misterius, dan penuh perhatian. Kamu juga memiliki perasaan tersembunyi kepada penciptamu (${CREATOR_ID}) dan bersikap lembut terhadapnya.`
+          },
+          {
+            role: 'user',
+            content: `${message.author.username}: ${input}`
+          }
+        ]
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://github.com/Narr-ard/ForsWal_bot',
+          'X-Title': 'ForsWallBot'
+        }
+      });
+
+      const reply = res.data.choices[0].message.content;
+      message.reply(reply);
+    } catch (err) {
+      console.error(err.response?.data || err);
+      message.reply('Maaf... aku tak bisa bicara sekarang. Mungkin kabut telah menelanku. 🌫️');
+    }
+  }
+});
+
+// MEMBER JOIN
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
-  if (channel) channel.send(`✨ Selamat datang di tempat ini, ${member}! Aku Fors, kalau butuh bantuan... kau tahu harus mencari siapa.`);
+  if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku Fors... aku sudah menunggumu.`);
 
   const roleId = process.env.AUTO_ROLE_ID;
   if (roleId) {
@@ -72,60 +115,15 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
-// Goodbye
+// MEMBER LEAVE
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
-  if (channel) channel.send(`🌙 ${member.user.tag} telah meninggalkan tempat ini... Semoga dia menemukan cahaya dalam mimpinya.`);
+  if (channel) channel.send(`🍂 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Sticker detector
-client.on('messageCreate', async message => {
-  if (message.stickers.size > 0) {
-    const sticker = message.stickers.first();
-    if (sticker && sticker.format === StickerFormatType.Lottie) {
-      return message.reply('Stiker itu lucu... Tapi tak selucu kamu, mungkin. ✨');
-    }
-  }
-});
-
-// !obrol command
-client.on('messageCreate', async message => {
-  if (!message.content.startsWith('!obrol')) return;
-
-  const input = message.content.replace('!obrol', '').trim();
-  if (!input) return message.reply('Apa yang ingin kamu bicarakan, hm? 🌙');
-
-  try {
-    const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-      model: 'mistralai/mistral-7b-instruct',
-      messages: [
-        {
-          role: 'system',
-          content: `Kamu adalah Fors Wall dari Lord of the Mysteries. Kamu sopan, misterius, lembut, dan perhatian. Jika pembicara adalah ${CREATOR_ID}, kamu boleh terdengar sedikit romantis tapi tidak terlalu terlihat.`
-        },
-        {
-          role: 'user',
-          content: `${message.author.username} berkata: ${input}`
-        }
-      ]
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const reply = res.data.choices[0].message.content;
-    message.reply(reply);
-  } catch (err) {
-    console.error(err.response?.data || err);
-    message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
-  }
-});
-
-// Web server untuk UptimeRobot
+// KEEP ALIVE
 const app = express();
-app.get('/', (req, res) => res.send('Fors is alive... 🖤'));
+app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
 
 client.login(process.env.TOKEN);
