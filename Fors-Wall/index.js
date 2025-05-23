@@ -1,9 +1,11 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 const express = require('express');
 
-// Inisialisasi client
+// Inisialisasi bot
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -17,28 +19,28 @@ const client = new Client({
 client.commands = new Collection();
 const prefix = '!';
 
-// Load semua command dari folder ./commands
+// Load semua command dari folder ./commands/
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
   client.commands.set(command.name, command);
 }
 
-// Event: Saat user mengirim pesan
+// Event: Saat pesan dikirim
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
-  // Auto-learning reply system
   const learnedPath = './data/learned.json';
   const learned = fs.existsSync(learnedPath) ? JSON.parse(fs.readFileSync(learnedPath)) : {};
   const msgContent = message.content.toLowerCase();
 
+  // Auto-reply dari pembelajaran
   if (learned[msgContent]) {
     message.reply(learned[msgContent]);
     return;
   }
 
-  // Handle command
+  // Cek prefix dan command
   if (!message.content.startsWith(prefix)) return;
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
@@ -50,16 +52,16 @@ client.on('messageCreate', async message => {
     await command.execute(message, args, client);
   } catch (error) {
     console.error(error);
-    message.reply('Terjadi kesalahan saat menjalankan perintah.');
+    message.reply('❌ Terjadi kesalahan saat menjalankan perintah.');
   }
 });
 
-// Welcome: saat user join server
+// Event: Saat member baru masuk
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`👋 Selamat datang di server, ${member}!`);
 
-  // Auto-role (jika AUTO_ROLE_ID tersedia)
+  // Auto-role (jika tersedia di .env)
   const roleId = process.env.AUTO_ROLE_ID;
   if (roleId) {
     const role = member.guild.roles.cache.get(roleId);
@@ -74,16 +76,16 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
-// Goodbye: saat user keluar
+// Event: Saat member keluar
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`😢 ${member.user.tag} telah keluar dari server.`);
 });
 
-// Ping server agar tetap aktif via UptimeRobot
+// Express server untuk UptimeRobot ping
 const app = express();
-app.get('/', (req, res) => res.send('Bot is alive!'));
-app.listen(3000, () => console.log('🌐 Ping server aktif di port 3000'));
+app.get('/', (req, res) => res.send('🤖 Bot is alive!'));
+app.listen(3000, () => console.log('🌐 Server Express berjalan di port 3000'));
 
 // Login bot
 client.login(process.env.TOKEN);
