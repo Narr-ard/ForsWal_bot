@@ -1,23 +1,23 @@
-// Versi Final index.js dengan Auto-Learning, Auto Role, ChatBot, Q&A, Translator, dan Keep Alive
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const axios = require('axios');
-const path = require('path');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions
   ],
   partials: [Partials.Channel]
 });
 
-client.commands = new Collection();
 const prefix = '!';
+client.commands = new Collection();
 
 // Load commands
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
@@ -26,42 +26,35 @@ for (const file of commandFiles) {
   client.commands.set(command.name, command);
 }
 
-// Load data
-const learnedPath = './data/learned.json';
-const qaPath = './data/qa.json';
-const obrolPath = './data/obrol.json';
-
-let learned = fs.existsSync(learnedPath) ? JSON.parse(fs.readFileSync(learnedPath)) : {};
-let qa = fs.existsSync(qaPath) ? JSON.parse(fs.readFileSync(qaPath)) : {};
-let obrol = fs.existsSync(obrolPath) ? JSON.parse(fs.readFileSync(obrolPath)) : [];
-
-// Message handler
+// Message Event
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
-  const content = message.content.toLowerCase();
 
-  // Auto Reply
-  if (learned[content]) {
-    return message.reply(learned[content]);
+  const msg = message.content.toLowerCase();
+
+  // === Auto-reply Learning ===
+  const learnedPath = './data/learned.json';
+  const learned = fs.existsSync(learnedPath) ? JSON.parse(fs.readFileSync(learnedPath)) : {};
+  if (learned[msg]) {
+    message.reply(learned[msg]);
+    return;
   }
 
-  // Auto Q&A
-  if (qa[content]) {
-    return message.reply(qa[content]);
+  // === Sticker-based Chat (if sticker is sent) ===
+  if (message.stickers.size > 0) {
+    const sticker = message.stickers.first();
+    message.reply({
+      content: `Hehe... kamu kirim stiker ${sticker.name}? Terlihat menarik, seperti misteri yang belum terpecahkan...`,
+      allowedMentions: { repliedUser: false }
+    });
+    return;
   }
 
-  // Chat Mode (!obrol)
-  const chatUser = obrol.find(pair => pair.user.toLowerCase() === content);
-  if (chatUser) {
-    return message.reply(chatUser.bot);
-  }
-
-  // Commands
-  if (!message.content.startsWith(prefix)) return;
+  // === Command Handler ===
+  if (!msg.startsWith(prefix)) return;
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
   const command = client.commands.get(commandName);
-
   if (!command) return;
 
   try {
@@ -72,21 +65,17 @@ client.on('messageCreate', async message => {
   }
 });
 
-// Welcome and Auto Role
+// Welcome and auto-role
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`👋 Selamat datang di server, ${member}!`);
-
   const roleId = process.env.AUTO_ROLE_ID;
   if (roleId) {
-    const role = member.guild.roles.cache.get(roleId);
-    if (role) {
-      try {
-        await member.roles.add(role);
-        console.log(`✅ ${member.user.tag} diberi role otomatis.`);
-      } catch (err) {
-        console.error(`❌ Gagal memberi role ke ${member.user.tag}:`, err);
-      }
+    try {
+      const role = member.guild.roles.cache.get(roleId);
+      if (role) await member.roles.add(role);
+    } catch (e) {
+      console.error('❌ Gagal menambahkan role otomatis:', e);
     }
   }
 });
@@ -94,26 +83,13 @@ client.on('guildMemberAdd', async member => {
 // Goodbye
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
-  if (channel) channel.send(`😢 ${member.user.tag} telah keluar dari server.`);
+  if (channel) channel.send(`😢 ${member.user.tag} telah meninggalkan server.`);
 });
 
-// Keep alive server for uptime
+// Express ping server untuk UptimeRobot
 const app = express();
-app.get('/', (req, res) => res.send('Bot is alive!'));
-app.listen(3000, () => console.log('🌐 Ping server aktif di port 3000'));
+app.get('/', (req, res) => res.send('Fors Wall bot is alive.'));
+app.listen(3000, () => console.log('🌐 Express server berjalan di port 3000'));
 
-// Save data back if needed (optional helper)
-function saveData() {
-  fs.writeFileSync(learnedPath, JSON.stringify(learned, null, 2));
-  fs.writeFileSync(qaPath, JSON.stringify(qa, null, 2));
-  fs.writeFileSync(obrolPath, JSON.stringify(obrol, null, 2));
-}
-
-// Export data and save function if needed by commands
-client.learned = learned;
-client.qa = qa;
-client.obrol = obrol;
-client.saveData = saveData;
-
-// Start bot
+// Login bot
 client.login(process.env.TOKEN);
