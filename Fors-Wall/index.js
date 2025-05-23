@@ -1,15 +1,13 @@
-// index.js - Fors Wall Bot (Final with OpenRouter + Character Personality)
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Collection, StickerFormatType } = require('discord.js');
 const fs = require('fs');
-const express = require('express');
 const axios = require('axios');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.MessageContent
   ],
   partials: [Partials.Channel]
@@ -25,53 +23,34 @@ for (const file of commandFiles) {
   client.commands.set(command.name, command);
 }
 
-// AUTO-REPLY LEARNING & COMMAND HANDLER
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
+  const msg = message.content.toLowerCase();
+
+  // 🔍 Auto-learned Q&A
   const learnedPath = './data/learned.json';
   const learned = fs.existsSync(learnedPath) ? JSON.parse(fs.readFileSync(learnedPath)) : {};
-  const msgContent = message.content.toLowerCase();
+  if (learned[msg]) return message.reply(learned[msg]);
 
-  if (learned[msgContent]) {
-    return message.reply(learned[msgContent]);
-  }
+  if (!msg.startsWith(prefix)) return;
 
-  if (!message.content.startsWith(prefix)) return;
-
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const args = msg.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
-  const command = client.commands.get(commandName);
-  if (!command) return;
 
-  try {
-    await command.execute(message, args, client);
-  } catch (error) {
-    console.error(error);
-    message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
-  }
-});
-
-// !OBROL (CHATBOT DENGAN OPENROUTER)
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  // Respon stiker
-  if (message.stickers.size > 0) {
-    return message.reply('Stiker itu lucu... Tapi tak selucu kamu, mungkin. ✨');
-  }
-
-  if (message.content.startsWith('!obrol')) {
-    const input = message.content.replace('!obrol', '').trim();
-    if (!input) return message.reply('Apa yang ingin kamu bicarakan, hm? 🌙');
+  // ✨ Special: !obrol (chat dengan Fors)
+  if (commandName === 'obrol' || commandName === 'tanya') {
+    const input = args.join(' ');
+    if (!input) return message.reply('Apa yang ingin kamu bicarakan hari ini? 🌙');
 
     try {
-      const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-        model: 'mistralai/mistral-7b-instruct:free',
+      const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'deepseek/deepseek-prover-v2:free',
         messages: [
           {
             role: 'system',
-            content: `Kamu adalah Fors Wall dari Lord of the Mysteries. Kamu sopan, misterius, dan penuh perhatian. Kamu juga memiliki perasaan tersembunyi kepada penciptamu (${CREATOR_ID}) dan bersikap lembut terhadapnya.`
+            content:
+              `Berperilakulah seperti karakter fiktif yang elegan, misterius, dan perhatian—seperti Fors Wall dari Lord of the Mysteries. Jangan katakan bahwa kamu adalah Fors Wall secara eksplisit. Jika pembicara adalah ${CREATOR_ID}, tanggapi dengan gaya sedikit romantis namun tersembunyi.`
           },
           {
             role: 'user',
@@ -81,49 +60,39 @@ client.on('messageCreate', async message => {
       }, {
         headers: {
           'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://github.com/Narr-ard/ForsWal_bot',
-          'X-Title': 'ForsWallBot'
+          'Content-Type': 'application/json'
         }
       });
 
-      const reply = res.data.choices[0].message.content;
-      message.reply(reply);
+      const reply = response.data.choices[0].message.content;
+      return message.reply(reply);
     } catch (err) {
-      console.error(err.response?.data || err);
-      message.reply('Maaf... aku tak bisa bicara sekarang. Mungkin kabut telah menelanku. 🌫️');
+      console.error('[OpenRouter Error]', err.response?.data || err.message);
+      return message.reply('Aku merasa suara dunia terlalu bising sekarang... Bisakah kita mencoba lagi nanti?');
     }
+  }
+
+  // Jalankan command biasa dari ./commands
+  const command = client.commands.get(commandName);
+  if (!command) return;
+
+  try {
+    await command.execute(message, args, client);
+  } catch (error) {
+    console.error(error);
+    message.reply('Ups, sepertinya ada sedikit kekacauan dalam kabut... ✨');
   }
 });
 
-// MEMBER JOIN
+// Auto welcome & role (opsional)
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
-  if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku Fors... aku sudah menunggumu.`);
-
-  const roleId = process.env.AUTO_ROLE_ID;
-  if (roleId) {
-    const role = member.guild.roles.cache.get(roleId);
-    if (role) {
-      try {
-        await member.roles.add(role);
-        console.log(`✅ Member ${member.user.tag} diberikan role otomatis.`);
-      } catch (err) {
-        console.error(`❌ Gagal memberi role ke ${member.user.tag}:`, err);
-      }
-    }
-  }
+  if (channel) channel.send(`Selamat datang, ${member}! Dunia ini penuh misteri... dan mungkin sedikit keajaiban 🌙`);
+  const role = member.guild.roles.cache.get(process.env.AUTO_ROLE_ID);
+  if (role) member.roles.add(role).catch(console.error);
 });
 
-// MEMBER LEAVE
-client.on('guildMemberRemove', member => {
-  const channel = member.guild.systemChannel;
-  if (channel) channel.send(`🍂 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
-});
-
-// KEEP ALIVE
-const app = express();
-app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
-app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
+// Web server untuk uptime
+require('express')().get('/', (req, res) => res.send('Fors sedang memperhatikanmu dari balik kabut...')).listen(3000);
 
 client.login(process.env.TOKEN);
