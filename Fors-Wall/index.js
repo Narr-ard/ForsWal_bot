@@ -16,16 +16,18 @@ const client = new Client({
 
 const prefix = '!';
 const CREATOR_ID = process.env.CREATOR_ID;
-const cooldowns = new Map();
 
+// Load Commands
 client.commands = new Collection();
+client.cooldowns = new Collection();
+
 const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js')) : [];
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
   client.commands.set(command.name, command);
 }
 
-// Handle learned replies + commands
+// Handle learned responses and commands
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -44,26 +46,35 @@ client.on('messageCreate', async message => {
   const command = client.commands.get(commandName);
   if (!command) return;
 
-  // hidden command check
-  if (command.hidden && message.author.id !== CREATOR_ID) return;
+  // ========== Cooldown logic ==========
+  const now = Date.now();
+  const timestamps = client.cooldowns.get(command.name) || new Collection();
+  const cooldownAmount = (command.cooldown || 5) * 1000;
 
-  const cooldownKey = `${message.author.id}-${commandName}`;
-  if (cooldowns.has(cooldownKey)) {
-    const remaining = ((cooldowns.get(cooldownKey) - Date.now()) / 1000).toFixed(1);
-    return message.reply(`🕰️ Tunggu ${remaining} detik sebelum menggunakan perintah ini lagi.`);
+  if (timestamps.has(message.author.id)) {
+    const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
+
+    if (now < expirationTime) {
+      const timeLeft = ((expirationTime - now) / 1000).toFixed(1);
+      return message.reply(`⏳ Tunggu ${timeLeft} detik sebelum menggunakan \`${prefix}${command.name}\` lagi.`);
+    }
   }
+
+  timestamps.set(message.author.id, now);
+  client.cooldowns.set(command.name, timestamps);
+  setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
+
+  // ====================================
 
   try {
     await command.execute(message, args, client);
-    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
-    setTimeout(() => cooldowns.delete(cooldownKey), 5000);
   } catch (error) {
     console.error(error);
     message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
   }
 });
 
-// !obrol dan !tanya (OpenRouter AI)
+// !obrol dan !tanya (DeepSeek AI personality chat)
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.content.startsWith('!')) return;
 
@@ -81,7 +92,7 @@ client.on('messageCreate', async message => {
           messages: [
             {
               role: 'system',
-              content: `Berperilakulah seperti karakter fiktif misterius dan dewasa dari Lord of the Mysteries. Jawablah dengan tenang, kadang sedikit menggoda dan elegan. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan nuansa romantis dan setia. Gunakan bahasa Indonesia.`
+              content: `Berperilakulah seperti karakter fiktif misterius dan dewasa dari Lord of the Mysteries. Jawablah dengan tenang, kadang sedikit menggoda dan elegan. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan nuansa romantis dan setia.`
             },
             {
               role: 'user',
@@ -99,18 +110,22 @@ client.on('messageCreate', async message => {
         }
       );
 
-      let reply = response.data.choices?.[0]?.message?.content?.trim() || '...';
-      // Bersihkan blok kode & JSON
-      reply = reply.replace(/```(?:json)?/g, '').replace(/"?(jawaban|kalimat_romantis)"?: ?"?(.*?)"?[,]?/g, '$2').replace(/^\s*{?\s*|\s*}?\s*$/g, '');
+      let reply = response.data.choices[0].message.content.trim();
+
+      try {
+        const parsed = JSON.parse(reply);
+        if (typeof parsed === 'object' && parsed.jawaban) reply = parsed.jawaban;
+      } catch (_) {}
+
       return message.reply(reply);
     } catch (err) {
       console.error('[OpenRouter Error]', err.response?.data || err.message);
-      return message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
+      return message.reply('Aku merasa suara dunia terlalu bising sekarang... Bisakah kita mencoba lagi nanti?');
     }
   }
 });
 
-// Welcome member
+// Welcome message + auto-role
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku sudah menunggumu.`);
@@ -135,7 +150,7 @@ client.on('guildMemberRemove', member => {
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Keep alive express
+// Express keep-alive
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
