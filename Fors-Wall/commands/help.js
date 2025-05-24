@@ -5,13 +5,12 @@ module.exports = {
   async execute(message, args, client) {
     const categories = {};
 
-    client.commands.forEach(command => {
-      if (command.hidden) return; // Sembunyikan command yang ditandai hidden
-
-      const category = command.category || 'Lainnya';
-      if (!categories[category]) categories[category] = [];
-      categories[category].push(`**!${command.name}** — ${command.description || 'Tidak ada deskripsi.'}`);
-    });
+   client.commands.forEach(command => {
+  if (command.hidden) return; // Abaikan hidden commands
+  const category = command.category || 'Lainnya';
+  if (!categories[category]) categories[category] = [];
+  categories[category].push(`**!${command.name}** — ${command.description || 'Tidak ada deskripsi.'}`);
+});
 
     const embedFields = Object.entries(categories).map(([category, commands]) => ({
       name: `📂 ${category}`,
