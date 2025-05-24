@@ -16,6 +16,7 @@ const client = new Client({
 
 const prefix = '!';
 const CREATOR_ID = process.env.CREATOR_ID;
+const cooldowns = new Map();
 
 client.commands = new Collection();
 const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js')) : [];
@@ -43,15 +44,23 @@ client.on('messageCreate', async message => {
   const command = client.commands.get(commandName);
   if (!command) return;
 
+  const cooldownKey = `${message.author.id}-${commandName}`;
+  if (cooldowns.has(cooldownKey)) {
+    const remaining = ((cooldowns.get(cooldownKey) - Date.now()) / 1000).toFixed(1);
+    return message.reply(`🕰️ Tunggu ${remaining} detik sebelum menggunakan perintah ini lagi.`);
+  }
+
   try {
     await command.execute(message, args, client);
+    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
+    setTimeout(() => cooldowns.delete(cooldownKey), 5000);
   } catch (error) {
     console.error(error);
     message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
   }
 });
 
-// !obrol dan !tanya (DeepSeek Personality AI)
+// !obrol dan !tanya (OpenRouter AI)
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.content.startsWith('!')) return;
 
@@ -69,7 +78,7 @@ client.on('messageCreate', async message => {
           messages: [
             {
               role: 'system',
-              content: `Berperilakulah seperti karakter fiktif misterius dan dewasa dari Lord of the Mysteries. Jawablah dengan tenang, kadang sedikit menggoda dan elegan. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan nuansa romantis dan setia.`
+              content: `Berperilakulah seperti karakter fiktif misterius dan dewasa dari Lord of the Mysteries. Jawablah dengan tenang, kadang sedikit menggoda dan elegan. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan nuansa romantis dan setia. Gunakan bahasa Indonesia.`
             },
             {
               role: 'user',
@@ -97,7 +106,7 @@ client.on('messageCreate', async message => {
       return message.reply(reply);
     } catch (err) {
       console.error('[OpenRouter Error]', err.response?.data || err.message);
-      return message.reply('Aku merasa suara dunia terlalu bising sekarang... Bisakah kita mencoba lagi nanti?');
+      return message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
     }
   }
 });
