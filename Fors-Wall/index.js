@@ -1,6 +1,5 @@
-// index.js (Final Version - DeepSeek + Fors Wall Personality)
 require('dotenv').config();
-const { Client, GatewayIntentBits, Partials, Collection, StickerFormatType } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
 const express = require('express');
 const axios = require('axios');
@@ -25,7 +24,7 @@ for (const file of commandFiles) {
   client.commands.set(command.name, command);
 }
 
-// Handle command and learned replies
+// Handle learned replies + commands
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -70,7 +69,7 @@ client.on('messageCreate', async message => {
           messages: [
             {
               role: 'system',
-              content: `Berperilakulah seperti karakter fiktif yang elegan, misterius, dan perhatian—terinspirasi dari Fors Wall. Jangan sebut namamu. Jika yang bertanya adalah ${CREATOR_ID}, tanggapi dengan gaya sedikit romantis.`
+              content: `Berperilakulah seperti karakter fiktif misterius dan dewasa dari Lord of the Mysteries. Jawablah dengan tenang, kadang sedikit menggoda dan elegan. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan nuansa romantis dan setia.`
             },
             {
               role: 'user',
