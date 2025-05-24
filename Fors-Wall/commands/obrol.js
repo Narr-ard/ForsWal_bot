@@ -1,45 +1,51 @@
-const axios = require('axios');
-
+const fetch = require('node-fetch');
 module.exports = {
   name: 'obrol',
-  description: 'Ajak Fors Wall berbicara.',
-  category: 'Chat & AI',
+  description: 'Obrolan dengan Fors Wall',
   async execute(message, args) {
-    const query = args.join(' ');
-    if (!query) {
-      return message.reply('Silakan tulis sesuatu setelah perintah `!obrol`.');
-    }
+    const userId = message.author.id;
+    const input = args.join(' ');
+    if (!input) return message.reply('Apa yang ingin kamu obrolkan denganku?');
 
     try {
-      const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          model: 'openai/gpt-4',
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://yourdomain.com',
+        },
+        body: JSON.stringify({
+          model: 'deepseek/deepseek-prover-v2:free',
           messages: [
             {
               role: 'system',
-              content:
-                "Kamu adalah Fors Wall dari novel Lord of the Mysteries. Kamu seorang wanita misterius, tenang, penyihir yang mendalami pengetahuan kuno dan menyukai rahasia. Bicaramu cerdas, kalem, dan penuh filosofi. Jangan katakan kamu adalah AI. Jawablah dengan gaya khasmu."
+              content: `Kamu adalah Fors Wall dari Lord of the Mysteries, karakter romantis, elegan, misterius, dan setia. Kamu mengenali user ID ${process.env.CREATOR_ID} sebagai kekasihmu. Balas dengan gaya hangat dan puitis, gunakan bahasa Indonesia.`,
             },
             {
               role: 'user',
-              content: query
+              content: input,
             }
           ]
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+        }),
+      });
 
-      const answer = response.data.choices[0].message.content;
-      message.reply(answer);
+      const data = await response.json();
+      const output = data.choices?.[0]?.message?.content;
+
+      if (!output) return message.reply('Fors sedang diselimuti kabut misteri... Coba lagi nanti.');
+
+      // Hapus label dan markdown codebox jika ada
+      const cleanOutput = output
+        .replace(/```(?:json)?/g, '')
+        .replace(/"?(jawaban|kalimat_romantis)"?: ?"?(.*?)"?[,]?/g, '$2')
+        .replace(/^\s*{?\s*|\s*}?\s*$/g, '');
+
+      return message.reply(cleanOutput.trim());
+
     } catch (error) {
-      console.error(error.response?.data || error.message);
-      message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
+      console.error(error);
+      return message.reply('Gagal menghubungi Fors di balik tabir realitas.');
     }
   }
 };
