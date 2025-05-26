@@ -65,11 +65,11 @@ client.on('messageCreate', async message => {
             messages: [
               {
                 role: 'system',
-                content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, dan penyihir yang menyukai rahasia serta filsafat. Jawablah dengan gaya kalem, elegan, dan puitis. Jika ${CREATOR_ID} yang bertanya, sampaikan dengan nada lembut dan sedikit romantis. Hindari menyebut pengguna sebagai "penanya". Gunakan bahasa Indonesia.`
+                content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, dan penyihir yang menyukai rahasia serta filsafat. Jawablah langsung dan alami, seperti sedang berbicara. Jangan balas dalam format JSON, markdown, atau bullet list. Hindari menyebut "penanya", dan jangan beri penjelasan tentang gaya bicara atau tone. Jika ${CREATOR_ID} yang bertanya, tanggapi dengan lembut dan sedikit romantis. Gunakan bahasa Indonesia.`
               },
               {
                 role: 'user',
-                content: `${message.author.username}: ${input}`
+                content: input
               }
             ]
           },
@@ -85,21 +85,29 @@ client.on('messageCreate', async message => {
 
         let reply = response?.data?.choices?.[0]?.message?.content || '';
 
-        // Coba parse JSON jika perlu
+        // Coba parse JSON jika valid dan ekstrak "message"
         try {
           const parsed = JSON.parse(reply);
           if (typeof parsed === 'object' && parsed.message) {
             reply = parsed.message;
           }
         } catch (_) {
-          // Bukan JSON? Lanjut aja
+          // Jika bukan JSON, tetap pakai original reply
         }
 
-        // Bersihkan teks aneh
+        // Bersihkan teks dari JSON & instruksi AI
         reply = reply
-          .replace(/^json\s*/i, '')                      // hapus 'json'
-          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')       // hapus awalan ```
-          .replace(/```[\s\S]*?```/g, '')                // hapus blok kode markdown
+          .replace(/^json\s*/i, '')
+          .replace(/^Penjelasan:.*/gis, '')
+          .replace(/```/g, '')
+          .replace(/'''/g, '')
+          .replace(/["]{3}/g, '')
+          .replace(/Tone:.*/gi, '')
+          .replace(/Gaya:.*/gi, '')
+          .replace(/Pertanyaan Terbuka:.*/gi, '')
+          .replace(/Bahasa Indonesia:.*/gi, '')
+          .replace(/Kecadangan dan Keramahan:.*/gi, '')
+          .replace(/^\{[\s\S]*?\}/g, '') // Hapus isi JSON seperti { "message": ... }
           .trim();
 
         if (!reply) {
