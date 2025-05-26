@@ -57,61 +57,52 @@ client.on('messageCreate', async message => {
 
       await message.channel.sendTyping();
 
-      const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          model: 'deepseek/deepseek-prover-v2:free',
-          messages: [
-            {
-              role: 'system',
-              content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, cerdas, penyihir kuno yang menyukai rahasia dan filsafat. Gunakan gaya bahasa yang kalem, elegan, dan penuh nuansa. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan lembut dan sedikit romantis. Gunakan bahasa Indonesia.`
-            },
-            {
-              role: 'user',
-              content: `${message.author.username}: ${input}`
-            }
-          ]
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://github.com/Narr-ard/ForsWal_bot',
-            'X-Title': 'ForsWallBot'
-          }
-        }
-      );
-
-      // Proses & bersihkan hasil
-      let reply = '';
       try {
-        const choices = response?.data?.choices;
-        if (Array.isArray(choices) && choices[0]?.message?.content) {
-          reply = choices[0].message.content.trim();
-        } else {
-          throw new Error("Balasan dari AI kosong atau tidak valid.");
-        }
+        const response = await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model: 'deepseek/deepseek-prover-v2:free',
+            messages: [
+              {
+                role: 'system',
+                content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, cerdas, penyihir kuno yang menyukai rahasia dan filsafat. Gunakan gaya bahasa yang kalem, elegan, dan penuh nuansa. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan lembut dan sedikit romantis. Gunakan bahasa Indonesia.`
+              },
+              {
+                role: 'user',
+                content: `${message.author.username}: ${input}`
+              }
+            ]
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://github.com/Narr-ard/ForsWal_bot',
+              'X-Title': 'ForsWallBot'
+            }
+          }
+        );
 
-        // Jika respons berupa JSON dengan jawaban
-        try {
-          const parsed = JSON.parse(reply);
-          if (typeof parsed === 'object' && parsed.jawaban) reply = parsed.jawaban;
-        } catch (_) {}
+        let reply = response?.data?.choices?.[0]?.message?.content || '';
 
-        // Bersihkan teks yang tidak diinginkan
+        // Bersihkan teks yang mengganggu
         reply = reply
-          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')    // hapus awalan "```", "'''", atau "ini"
-          .replace(/```[\s\S]*?```/g, '')             // hapus block kode markdown
+          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')   // hapus '```', "'''" atau 'ini' di awal
+          .replace(/```[\s\S]*?```/g, '')            // hapus blok kode markdown
           .trim();
 
-        if (!reply) throw new Error("Jawaban AI kosong setelah dibersihkan.");
+        if (!reply) {
+          reply = "Aku di sini... tapi kabutnya terlalu tebal untuk menjawab saat ini.";
+        }
 
         await message.reply({ content: reply, allowedMentions: { repliedUser: false } });
 
       } catch (err) {
-        console.error('[ForsWall AI Error]', err);
+        console.error('[OpenRouter Error]', err.response?.data || err.message);
         await message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
       }
+
+      return;
     } else {
       await command.execute(message, args, client);
     }
@@ -124,7 +115,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// Welcome
+// Welcome message
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku sudah menunggumu.`);
@@ -143,13 +134,13 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
-// Leave
+// Leave message
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Keep alive
+// Express keep-alive
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
