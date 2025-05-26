@@ -19,7 +19,7 @@ const CREATOR_ID = process.env.CREATOR_ID;
 const cooldowns = new Map();
 
 client.commands = new Collection();
-const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js') && !['obrol.js'].includes(file)) : [];
+const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js')) : [];
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
   client.commands.set(command.name, command);
@@ -41,13 +41,20 @@ client.on('messageCreate', async message => {
 
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
+  const command = client.commands.get(commandName);
+  if (!command && commandName !== 'obrol' && commandName !== 'tanya') return;
 
-  // !obrol dan !tanya langsung ditangani di bawah
-  if (['obrol', 'tanya'].includes(commandName)) {
-    const input = args.join(' ');
-    if (!input) return message.reply('Apa yang ingin kamu bicarakan hari ini? 🌙');
+  const cooldownKey = `${message.author.id}-${commandName}`;
+  if (cooldowns.has(cooldownKey)) {
+    const remaining = ((cooldowns.get(cooldownKey) - Date.now()) / 1000).toFixed(1);
+    return message.reply(`🕰️ Tunggu ${remaining} detik sebelum menggunakan perintah ini lagi.`);
+  }
 
-    try {
+  try {
+    if (commandName === 'obrol' || commandName === 'tanya') {
+      const input = args.join(' ');
+      if (!input) return message.reply('Apa yang ingin kamu bicarakan hari ini? 🌙');
+
       await message.channel.sendTyping();
 
       const response = await axios.post(
@@ -57,7 +64,7 @@ client.on('messageCreate', async message => {
           messages: [
             {
               role: 'system',
-              content: `Berperilakulah seperti karakter fiktif misterius dan dewasa dari Lord of the Mysteries. Jawablah dengan tenang, kadang sedikit menggoda dan elegan. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan nuansa romantis dan setia. Gunakan bahasa Indonesia.`
+              content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, cerdas, penyihir kuno yang menyukai rahasia dan filsafat. Gunakan gaya bahasa yang kalem, elegan, dan penuh nuansa. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan lembut dan sedikit romantis. Gunakan bahasa Indonesia.`
             },
             {
               role: 'user',
@@ -77,39 +84,33 @@ client.on('messageCreate', async message => {
 
       let reply = response.data.choices[0].message.content.trim();
 
+      // Jika AI mengirim dalam format JSON
       try {
         const parsed = JSON.parse(reply);
         if (typeof parsed === 'object' && parsed.jawaban) reply = parsed.jawaban;
       } catch (_) {}
 
+      // Bersihkan output dari anomali
+      reply = reply
+        .replace(/^A:\s*/i, '')          // hapus 'A:'
+        .replace(/^indo\s*/i, '')        // hapus 'indo'
+        .replace(/```[\s\S]*?```/g, '')  // hapus kode block
+        .trim();
+
       return message.reply({ content: reply, allowedMentions: { repliedUser: false } });
-    } catch (err) {
-      console.error('[OpenRouter Error]', err.response?.data || err.message);
-      return message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
+    } else {
+      await command.execute(message, args, client);
     }
-  }
 
-  // Perintah biasa
-  const command = client.commands.get(commandName);
-  if (!command) return;
-
-  const cooldownKey = `${message.author.id}-${commandName}`;
-  if (cooldowns.has(cooldownKey)) {
-    const remaining = ((cooldowns.get(cooldownKey) - Date.now()) / 1000).toFixed(1);
-    return message.reply(`🕰️ Tunggu ${remaining} detik sebelum menggunakan perintah ini lagi.`);
-  }
-
-  try {
-    await command.execute(message, args, client);
-    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
+    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik
     setTimeout(() => cooldowns.delete(cooldownKey), 5000);
   } catch (error) {
-    console.error(error);
-    message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
+    console.error('[ForsWall Error]', error.response?.data || error.message);
+    message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
   }
 });
 
-// Welcome member
+// Welcome
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku sudah menunggumu.`);
@@ -134,7 +135,7 @@ client.on('guildMemberRemove', member => {
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Keep alive express
+// Express server
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
