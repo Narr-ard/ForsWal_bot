@@ -19,7 +19,7 @@ const CREATOR_ID = process.env.CREATOR_ID;
 const cooldowns = new Map();
 
 client.commands = new Collection();
-const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js')) : [];
+const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js') && !['obrol.js'].includes(file)) : [];
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
   client.commands.set(command.name, command);
@@ -41,36 +41,15 @@ client.on('messageCreate', async message => {
 
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
-  const command = client.commands.get(commandName);
-  if (!command) return;
 
-  const cooldownKey = `${message.author.id}-${commandName}`;
-  if (cooldowns.has(cooldownKey)) {
-    const remaining = ((cooldowns.get(cooldownKey) - Date.now()) / 1000).toFixed(1);
-    return message.reply(`🕰️ Tunggu ${remaining} detik sebelum menggunakan perintah ini lagi.`);
-  }
-
-  try {
-    await command.execute(message, args, client);
-    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
-    setTimeout(() => cooldowns.delete(cooldownKey), 5000);
-  } catch (error) {
-    console.error(error);
-    message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
-  }
-});
-
-// !obrol dan !tanya (OpenRouter AI)
-client.on('messageCreate', async message => {
-  if (message.author.bot || !message.content.startsWith('!')) return;
-
-  const [commandName, ...args] = message.content.slice(1).split(/\s+/);
-  const input = args.join(' ');
-
-  if (commandName === 'obrol' || commandName === 'tanya') {
+  // !obrol dan !tanya langsung ditangani di bawah
+  if (['obrol', 'tanya'].includes(commandName)) {
+    const input = args.join(' ');
     if (!input) return message.reply('Apa yang ingin kamu bicarakan hari ini? 🌙');
 
     try {
+      await message.channel.sendTyping();
+
       const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         {
@@ -103,11 +82,30 @@ client.on('messageCreate', async message => {
         if (typeof parsed === 'object' && parsed.jawaban) reply = parsed.jawaban;
       } catch (_) {}
 
-      return message.reply(reply);
+      return message.reply({ content: reply, allowedMentions: { repliedUser: false } });
     } catch (err) {
       console.error('[OpenRouter Error]', err.response?.data || err.message);
       return message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
     }
+  }
+
+  // Perintah biasa
+  const command = client.commands.get(commandName);
+  if (!command) return;
+
+  const cooldownKey = `${message.author.id}-${commandName}`;
+  if (cooldowns.has(cooldownKey)) {
+    const remaining = ((cooldowns.get(cooldownKey) - Date.now()) / 1000).toFixed(1);
+    return message.reply(`🕰️ Tunggu ${remaining} detik sebelum menggunakan perintah ini lagi.`);
+  }
+
+  try {
+    await command.execute(message, args, client);
+    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
+    setTimeout(() => cooldowns.delete(cooldownKey), 5000);
+  } catch (error) {
+    console.error(error);
+    message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
   }
 });
 
