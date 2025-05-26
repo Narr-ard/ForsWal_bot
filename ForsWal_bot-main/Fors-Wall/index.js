@@ -85,10 +85,21 @@ client.on('messageCreate', async message => {
 
         let reply = response?.data?.choices?.[0]?.message?.content || '';
 
-        // Bersihkan karakter aneh
+        // Coba parse JSON jika perlu
+        try {
+          const parsed = JSON.parse(reply);
+          if (typeof parsed === 'object' && parsed.message) {
+            reply = parsed.message;
+          }
+        } catch (_) {
+          // Bukan JSON? Lanjut aja
+        }
+
+        // Bersihkan teks aneh
         reply = reply
-          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')   // hapus awalan ``` atau 'ini'
-          .replace(/```[\s\S]*?```/g, '')            // hapus block kode
+          .replace(/^json\s*/i, '')                      // hapus 'json'
+          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')       // hapus awalan ```
+          .replace(/```[\s\S]*?```/g, '')                // hapus blok kode markdown
           .trim();
 
         if (!reply) {
@@ -115,7 +126,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// Welcome message
+// Welcome
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku sudah menunggumu.`);
@@ -134,13 +145,13 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
-// Leave message
+// Leave
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Express keep-alive
+// Keep alive
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
