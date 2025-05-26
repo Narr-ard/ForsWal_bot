@@ -82,31 +82,45 @@ client.on('messageCreate', async message => {
         }
       );
 
-      let reply = response.data.choices[0].message.content.trim();
-
-      // Jika AI mengirim dalam format JSON
+      // Proses & bersihkan hasil
+      let reply = '';
       try {
-        const parsed = JSON.parse(reply);
-        if (typeof parsed === 'object' && parsed.jawaban) reply = parsed.jawaban;
-      } catch (_) {}
+        const choices = response?.data?.choices;
+        if (Array.isArray(choices) && choices[0]?.message?.content) {
+          reply = choices[0].message.content.trim();
+        } else {
+          throw new Error("Balasan dari AI kosong atau tidak valid.");
+        }
 
-      // Bersihkan output dari anomali
-      reply = reply
-        .replace(/^A:\s*/i, '')          // hapus 'A:'
-        .replace(/^indo\s*/i, '')        // hapus 'indo'
-        .replace(/```[\s\S]*?```/g, '')  // hapus kode block
-        .trim();
+        // Jika respons berupa JSON dengan jawaban
+        try {
+          const parsed = JSON.parse(reply);
+          if (typeof parsed === 'object' && parsed.jawaban) reply = parsed.jawaban;
+        } catch (_) {}
 
-      return message.reply({ content: reply, allowedMentions: { repliedUser: false } });
+        // Bersihkan teks yang tidak diinginkan
+        reply = reply
+          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')    // hapus awalan "```", "'''", atau "ini"
+          .replace(/```[\s\S]*?```/g, '')             // hapus block kode markdown
+          .trim();
+
+        if (!reply) throw new Error("Jawaban AI kosong setelah dibersihkan.");
+
+        await message.reply({ content: reply, allowedMentions: { repliedUser: false } });
+
+      } catch (err) {
+        console.error('[ForsWall AI Error]', err);
+        await message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
+      }
     } else {
       await command.execute(message, args, client);
     }
 
-    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik
+    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
     setTimeout(() => cooldowns.delete(cooldownKey), 5000);
   } catch (error) {
-    console.error('[ForsWall Error]', error.response?.data || error.message);
-    message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
+    console.error(error);
+    message.reply('Ada yang salah saat menjalankan perintah... Tapi tenang, aku akan memperbaikinya ✨');
   }
 });
 
@@ -129,13 +143,13 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
-// Member leave
+// Leave
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Express server
+// Keep alive
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
