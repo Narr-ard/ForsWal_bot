@@ -65,7 +65,7 @@ client.on('messageCreate', async message => {
             messages: [
               {
                 role: 'system',
-                content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, cerdas, penyihir kuno yang menyukai rahasia dan filsafat. Gunakan gaya bahasa yang kalem, elegan, dan penuh nuansa. Jika penanya adalah ${CREATOR_ID}, tanggapi dengan lembut dan sedikit romantis. Gunakan bahasa Indonesia.`
+                content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, dan penyihir yang menyukai rahasia serta filsafat. Jawablah dengan gaya kalem, elegan, dan puitis. Jika ${CREATOR_ID} yang bertanya, sampaikan dengan nada lembut dan sedikit romantis dan sebut dia sebagai narr. Hindari menyebut pengguna sebagai "penanya". Gunakan bahasa Indonesia.`
               },
               {
                 role: 'user',
@@ -85,10 +85,10 @@ client.on('messageCreate', async message => {
 
         let reply = response?.data?.choices?.[0]?.message?.content || '';
 
-        // Bersihkan teks yang mengganggu
+        // Bersihkan karakter aneh
         reply = reply
-          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')   // hapus '```', "'''" atau 'ini' di awal
-          .replace(/```[\s\S]*?```/g, '')            // hapus blok kode markdown
+          .replace(/^(```|'''+|"+)?\s*(ini)?/i, '')   // hapus awalan ``` atau 'ini'
+          .replace(/```[\s\S]*?```/g, '')            // hapus block kode
           .trim();
 
         if (!reply) {
