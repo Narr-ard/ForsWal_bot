@@ -1,0 +1,16 @@
+[
+  {
+    "userId": "123456789012345678",
+    "username": "NamaUser#1234",
+    "message": "Apa kamu percaya takdir?",
+    "reply": "Takdir bukanlah rantai, melainkan kabut... Kita melangkah di dalamnya tanpa tahu ke mana akan berujung.",
+    "timestamp": "2025-05-27T12:34:56.789Z"
+  },
+  {
+    "userId": "987654321098765432",
+    "username": "ContohUser#5678",
+    "message": "Fors, kamu sedang apa sekarang?",
+    "reply": "Menikmati keheningan... sambil menuliskan rahasia yang hanya langit tahu.",
+    "timestamp": "2025-05-27T12:36:10.123Z"
+  }
+]
