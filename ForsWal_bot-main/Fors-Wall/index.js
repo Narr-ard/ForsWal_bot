@@ -19,20 +19,38 @@ const CREATOR_ID = process.env.CREATOR_ID;
 const cooldowns = new Map();
 
 client.commands = new Collection();
-const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js')) : [];
+
+// Load commands
+const commandFiles = fs.existsSync('./commands')
+  ? fs.readdirSync('./commands').filter(file => file.endsWith('.js'))
+  : [];
+
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
   client.commands.set(command.name, command);
 }
 
-// Handle learned replies + commands
+// Built-in !hallo command
+client.commands.set('hallo', {
+  name: 'hallo',
+  execute: async (message) => {
+    await message.reply('Halo juga 🌟 Aku di sini.');
+  }
+});
+
+// On message
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
+  // Romantis jika Fors Wall menyebut bot
+  if (message.author.id === '624452603052294177' && message.mentions.has(client.user)) {
+    return message.reply('🌹 Kau menyebut namaku... Aku bisa merasakan hatimu yang hangat, bahkan dari balik kabut.');
+  }
+
+  // Auto-reply dari data learned
   const learnedPath = './data/learned.json';
   const learned = fs.existsSync(learnedPath) ? JSON.parse(fs.readFileSync(learnedPath)) : {};
   const msgContent = message.content.toLowerCase();
-
   if (learned[msgContent]) {
     return message.reply(learned[msgContent]);
   }
@@ -41,6 +59,7 @@ client.on('messageCreate', async message => {
 
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
+
   const command = client.commands.get(commandName);
   if (!command && commandName !== 'obrol' && commandName !== 'tanya') return;
 
@@ -57,76 +76,58 @@ client.on('messageCreate', async message => {
 
       await message.channel.sendTyping();
 
-      try {
-        const response = await axios.post(
-          'https://openrouter.ai/api/v1/chat/completions',
-          {
-            model: 'deepseek/deepseek-prover-v2:free',
-            messages: [
-              {
-                role: 'system',
-                content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, dan penyihir yang menyukai rahasia serta filsafat. Jawablah langsung dan alami, seperti sedang berbicara. Jangan balas dalam format JSON, markdown, atau bullet list. Hindari menyebut "penanya", dan jangan beri penjelasan tentang gaya bicara atau tone. Jika ${CREATOR_ID} yang bertanya, tanggapi dengan lembut dan sangat romantis. Gunakan bahasa Indonesia.`
-              },
-              {
-                role: 'user',
-                content: input
-              }
-            ]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://github.com/Narr-ard/ForsWal_bot',
-              'X-Title': 'ForsWallBot'
+      const response = await axios.post(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          model: 'nousresearch/deephermes-3-mistral-24b-preview:free',
+          messages: [
+            {
+              role: 'system',
+              content: `Kamu adalah Fors Wall dari novel Lord of the Mysteries. Seorang wanita misterius, tenang, dan penyihir yang menyukai rahasia serta filsafat. Jawablah langsung dan alami, seperti sedang berbicara. Jangan balas dalam format JSON, markdown, atau bullet list. Hindari menyebut "penanya", dan jangan beri penjelasan tentang gaya bicara atau tone. Jika ${CREATOR_ID} yang bertanya, tanggapi dengan lembut dan sangat romantis. Gunakan bahasa Indonesia.`
+            },
+            {
+              role: 'user',
+              content: input
             }
+          ]
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://github.com/Narr-ard/ForsWal_bot',
+            'X-Title': 'ForsWallBot'
           }
-        );
-
-        let reply = response?.data?.choices?.[0]?.message?.content || '';
-
-        // Coba parse JSON jika valid dan ekstrak "message"
-        try {
-          const parsed = JSON.parse(reply);
-          if (typeof parsed === 'object' && parsed.message) {
-            reply = parsed.message;
-          }
-        } catch (_) {
-          // Jika bukan JSON, tetap pakai original reply
         }
+      );
 
-        // Bersihkan teks dari JSON & instruksi AI
-        reply = reply
-          .replace(/^json\s*/i, '')
-          .replace(/^Penjelasan:.*/gis, '')
-          .replace(/```/g, '')
-          .replace(/'''/g, '')
-          .replace(/["]{3}/g, '')
-          .replace(/Tone:.*/gi, '')
-          .replace(/Gaya:.*/gi, '')
-          .replace(/Pertanyaan Terbuka:.*/gi, '')
-          .replace(/Bahasa Indonesia:.*/gi, '')
-          .replace(/Kecadangan dan Keramahan:.*/gi, '')
-          .replace(/^\{[\s\S]*?\}/g, '') // Hapus isi JSON seperti { "message": ... }
-          .trim();
+      let reply = response?.data?.choices?.[0]?.message?.content || '';
 
-        if (!reply) {
-          reply = "Aku di sini... tapi kabutnya terlalu tebal untuk menjawab saat ini.";
-        }
+      // Bersihkan output
+      try {
+        const parsed = JSON.parse(reply);
+        if (parsed.message) reply = parsed.message;
+      } catch (_) {}
 
-        await message.reply({ content: reply, allowedMentions: { repliedUser: false } });
+      reply = reply
+        .replace(/^json\s*/i, '')
+        .replace(/```|'''|["]{3}/g, '')
+        .replace(/^\{[\s\S]*?\}/g, '')
+        .replace(/Tone:.*/gi, '')
+        .replace(/Gaya:.*/gi, '')
+        .replace(/Penjelasan:.*/gi, '')
+        .trim();
 
-      } catch (err) {
-        console.error('[OpenRouter Error]', err.response?.data || err.message);
-        await message.reply('Fors sedang menyembunyikan dirinya di kabut misteri... Coba lagi nanti.');
+      if (!reply) {
+        reply = "Aku di sini... tapi kabutnya terlalu tebal untuk menjawab saat ini.";
       }
 
-      return;
+      await message.reply({ content: reply, allowedMentions: { repliedUser: false } });
     } else {
       await command.execute(message, args, client);
     }
 
-    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
+    cooldowns.set(cooldownKey, Date.now() + 5000);
     setTimeout(() => cooldowns.delete(cooldownKey), 5000);
   } catch (error) {
     console.error(error);
@@ -159,9 +160,10 @@ client.on('guildMemberRemove', member => {
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
-// Keep alive
+// Keep Alive
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
 
+// Start Bot
 client.login(process.env.TOKEN);
