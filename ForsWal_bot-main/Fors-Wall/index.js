@@ -1,8 +1,9 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
-const axios = require('axios');
 const express = require('express');
+const axios = require('axios');
+const path = require('path');
 
 const client = new Client({
   intents: [
@@ -17,7 +18,6 @@ const client = new Client({
 const prefix = '!';
 const CREATOR_ID = process.env.CREATOR_ID;
 const cooldowns = new Map();
-const logFilePath = './data/obrol_logs.json';
 
 client.commands = new Collection();
 const commandFiles = fs.existsSync('./commands') ? fs.readdirSync('./commands').filter(file => file.endsWith('.js')) : [];
@@ -26,6 +26,11 @@ for (const file of commandFiles) {
   client.commands.set(command.name, command);
 }
 
+const OBROL_LOG_PATH = './data/obrol_logs.json';
+if (!fs.existsSync('./data')) fs.mkdirSync('./data');
+if (!fs.existsSync(OBROL_LOG_PATH)) fs.writeFileSync(OBROL_LOG_PATH, '[]');
+
+// Handle learned replies + commands
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -42,6 +47,7 @@ client.on('messageCreate', async message => {
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const commandName = args.shift().toLowerCase();
   const command = client.commands.get(commandName);
+  if (!command && commandName !== 'obrol' && commandName !== 'tanya') return;
 
   const cooldownKey = `${message.author.id}-${commandName}`;
   if (cooldowns.has(cooldownKey)) {
@@ -50,7 +56,7 @@ client.on('messageCreate', async message => {
   }
 
   try {
-    if (commandName === 'obrol') {
+    if (commandName === 'obrol' || commandName === 'tanya') {
       const input = args.join(' ');
       if (!input) return message.reply('Apa yang ingin kamu bicarakan hari ini? 🌙');
 
@@ -60,7 +66,7 @@ client.on('messageCreate', async message => {
         const response = await axios.post(
           'https://openrouter.ai/api/v1/chat/completions',
           {
-            model: 'deepseek/deepseek-prover-v2:free',
+            model: 'nousresearch/deephermes-3-mistral-24b-preview:free',
             messages: [
               {
                 role: 'system',
@@ -84,38 +90,39 @@ client.on('messageCreate', async message => {
 
         let reply = response?.data?.choices?.[0]?.message?.content || '';
 
-        // Bersihkan reply dari artefak format
+        // Bersihkan balasan dari format tidak diinginkan
         reply = reply
+          .replace(/```(?:\w+)?/g, '') // hapus ```python, ```json, dll
+          .replace(/'''/g, '')
+          .replace(/["]{3}/g, '')
+          .replace(/^\s*python\s*/gi, '')
           .replace(/^json\s*/i, '')
-          .replace(/```|'''|["]{3}/g, '')
-          .replace(/^\{[\s\S]*?\}/g, '')
+          .replace(/^Penjelasan:.*/gis, '')
           .replace(/Tone:.*/gi, '')
           .replace(/Gaya:.*/gi, '')
-          .replace(/Penjelasan:.*/gi, '')
+          .replace(/Pertanyaan Terbuka:.*/gi, '')
+          .replace(/Bahasa Indonesia:.*/gi, '')
+          .replace(/Kecadangan dan Keramahan:.*/gi, '')
+          .replace(/^\{[\s\S]*?\}/g, '') // Hapus isi JSON seperti { "message": ... }
           .trim();
 
         if (!reply) {
           reply = "Aku di sini... tapi kabutnya terlalu tebal untuk menjawab saat ini.";
         }
 
+        // Kirim balasan
         await message.reply({ content: reply, allowedMentions: { repliedUser: false } });
 
-        // Simpan ke log file
-        try {
-          const log = fs.existsSync(logFilePath) ? JSON.parse(fs.readFileSync(logFilePath)) : [];
-
-          log.push({
-            userId: message.author.id,
-            username: message.author.tag,
-            message: input,
-            reply: reply,
-            timestamp: new Date().toISOString()
-          });
-
-          fs.writeFileSync(logFilePath, JSON.stringify(log, null, 2));
-        } catch (err) {
-          console.error('Gagal menyimpan log obrol:', err);
-        }
+        // Simpan log percakapan
+        const logs = JSON.parse(fs.readFileSync(OBROL_LOG_PATH));
+        logs.push({
+          userId: message.author.id,
+          username: `${message.author.username}#${message.author.discriminator}`,
+          message: input,
+          reply: reply,
+          timestamp: new Date().toISOString()
+        });
+        fs.writeFileSync(OBROL_LOG_PATH, JSON.stringify(logs, null, 2));
 
       } catch (err) {
         console.error('[OpenRouter Error]', err.response?.data || err.message);
@@ -123,11 +130,11 @@ client.on('messageCreate', async message => {
       }
 
       return;
-    } else if (command) {
+    } else {
       await command.execute(message, args, client);
     }
 
-    cooldowns.set(cooldownKey, Date.now() + 5000);
+    cooldowns.set(cooldownKey, Date.now() + 5000); // 5 detik cooldown
     setTimeout(() => cooldowns.delete(cooldownKey), 5000);
   } catch (error) {
     console.error(error);
@@ -135,6 +142,7 @@ client.on('messageCreate', async message => {
   }
 });
 
+// Welcome
 client.on('guildMemberAdd', async member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🌌 Selamat datang, ${member}. Aku sudah menunggumu.`);
@@ -153,11 +161,13 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
+// Leave
 client.on('guildMemberRemove', member => {
   const channel = member.guild.systemChannel;
   if (channel) channel.send(`🍃 ${member.user.tag} telah pergi... Seperti mimpi yang tak kembali.`);
 });
 
+// Keep alive
 const app = express();
 app.get('/', (req, res) => res.send('Fors is watching through the mist... 🌫️'));
 app.listen(3000, () => console.log('✨ Web server berjalan di port 3000'));
